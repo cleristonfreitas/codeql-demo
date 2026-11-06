@@ -108,4 +108,4 @@ def register():
 
 if __name__ == "__main__":
     # 10) Flask em modo debug — py/flask-debug — HIGH (7.5)
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)
