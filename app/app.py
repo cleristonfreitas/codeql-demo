@@ -70,12 +70,12 @@ def restore_cart():
 
 
 # 5) SSRF — py/full-ssrf — CRITICAL (9.1)
-@app.route("/preview")
-def preview():
-    url = request.args.get("url", "")
-    resp = requests.get(url, timeout=5)
-    return {"status": resp.status_code, "length": len(resp.content)}
-
+#@app.route("/preview")
+#def preview():
+#    url = request.args.get("url", "")
+#    resp = requests.get(url, timeout=5)
+ #   return {"status": resp.status_code, "length": len(resp.content)}
+#
 
 # 6) Code Injection — py/code-injection — CRITICAL (9.3)
 @app.route("/calc")
