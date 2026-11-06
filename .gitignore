@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.codeql-db-*/
+sarif-results/
+codeql-report/
+app/vulnshop.db

@@ -1,0 +1,61 @@
+# Exporta os alertas abertos de Code Scanning e envia para fora do GitHub
+# Dispara: ao terminar o "CodeQL Security Gate" na main, todo dia, ou manualmente.
+name: "CodeQL Export"
+
+on:
+  workflow_run:
+    workflows: ["CodeQL Security Gate"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "41 10 * * *"   # diariamente 10:41 UTC (07:41 em Brasília)
+  workflow_dispatch:
+    inputs:
+      min_severity:
+        description: "Severidade mínima a exportar"
+        default: "low"
+        type: choice
+        options: [low, medium, high, critical]
+      create_issues:
+        description: "Criar issues para alertas high/critical?"
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      security-events: read   # ler alertas de code scanning
+      issues: write           # só usado se create_issues = true
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Exportar alertas (JSON/CSV/HTML) + webhook
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WEBHOOK_URL: ${{ secrets.CODEQL_WEBHOOK_URL }}         # opcional
+          WEBHOOK_FORMAT: ${{ vars.CODEQL_WEBHOOK_FORMAT || 'generic' }}  # slack | discord | teams | generic
+        run: |
+          python3 scripts/export_alerts.py \
+            --ref "refs/heads/${{ github.event.repository.default_branch }}" \
+            --min-severity "${{ inputs.min_severity || 'low' }}" \
+            --out-dir codeql-report
+
+      - name: Criar issues para high/critical
+        if: ${{ inputs.create_issues || vars.CODEQL_CREATE_ISSUES == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/export_alerts.py --min-severity high --out-dir /tmp/issues --create-issues
+
+      - name: Publicar relatório como artefato
+        uses: actions/upload-artifact@v7
+        with:
+          name: codeql-report-${{ github.run_id }}
+          path: codeql-report/
+          retention-days: 90

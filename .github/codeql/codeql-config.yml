@@ -1,0 +1,15 @@
+# Configuração do CodeQL usada pelo workflow .github/workflows/codeql.yml
+name: "VulnShop CodeQL config"
+
+# security-extended = suíte padrão + regras de segurança adicionais
+# (security-and-quality incluiria também regras de qualidade de código)
+queries:
+  - uses: security-extended
+
+# Analisa só o que interessa
+paths:
+  - app
+  - scripts
+paths-ignore:
+  - "**/tests/**"
+  - "**/test_*.py"

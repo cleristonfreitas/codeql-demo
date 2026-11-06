@@ -1,0 +1,84 @@
+# CodeQL + Security Gate
+# - Analisa o código com CodeQL (security-extended)
+# - Publica os alertas na aba Security > Code scanning
+# - BLOQUEIA o pipeline se houver achado CRITICAL ou HIGH
+# - Guarda o SARIF e o JSON de achados como artefato da execução
+name: "CodeQL Security Gate"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"   # toda segunda 06:17 UTC — pega CVEs/regras novas mesmo sem commit
+  workflow_dispatch:
+
+# Cancela execuções antigas do mesmo PR/branch
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write   # enviar SARIF para o Code scanning
+      actions: read            # necessário em repositórios privados / leitura do workflow
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: python
+            build-mode: none
+          # Exemplos para outros projetos:
+          # - language: javascript-typescript
+          #   build-mode: none
+          # - language: java-kotlin
+          #   build-mode: autobuild
+          # - language: actions        # analisa os próprios workflows do GitHub Actions
+          #   build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Inicializar CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Analisar com CodeQL
+        id: analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+          output: sarif-results       # mantém o SARIF no disco para o gate
+          upload: always              # envia para a aba Security mesmo se o gate falhar
+
+      - name: Security Gate (bloqueia CRITICAL/HIGH)
+        run: |
+          python3 scripts/sarif_gate.py \
+            --sarif-dir sarif-results \
+            --fail-on "${FAIL_ON}" \
+            --json-out sarif-results/findings-${{ matrix.language }}.json \
+            --summary "$GITHUB_STEP_SUMMARY"
+        env:
+          # Altere aqui (ou crie a variável de repositório CODEQL_FAIL_ON) para: critical | high | medium | low
+          FAIL_ON: ${{ vars.CODEQL_FAIL_ON || 'high' }}
+
+      - name: Guardar SARIF e achados como artefato
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: codeql-${{ matrix.language }}-${{ github.run_id }}
+          path: sarif-results/
+          retention-days: 30
